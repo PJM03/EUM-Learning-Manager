@@ -1,0 +1,114 @@
+let sessionList = loadSessionList();
+let activeSessionId = sessionStorage.getItem('activeSessionId');
+let session = sessionList.find(s => s.id === activeSessionId);
+let questions = session ? session.data.questions : [];
+let userAnswers = session ? session.data.userAnswers : {};
+let currentIndex = 0;
+let slideDirection = ''; 
+
+if (!session || session.completed) { window.location.href = 'index.html'; }
+
+window.onload = () => {
+    document.getElementById('sidebar-title').innerText = session.subject || "학습 목록";
+    document.getElementById('sidebar-subtitle').innerText = session.title;
+    renderSidebar(); renderProgressBar(); updateDisplay();
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            if (currentIndex < questions.length - 1) moveQuestion(1);
+            else document.getElementById('final-submit-btn').focus();
+        }
+    });
+};
+
+function renderSidebar() {
+    const list = document.getElementById('question-list');
+    list.innerHTML = '';
+    questions.forEach((q, i) => {
+        const div = document.createElement('div');
+        div.className = 'sidebar-item'; div.id = `side-item-${i}`;
+        let pts = q.score !== undefined ? `<span style="font-size:0.75rem; color:var(--primary); background:var(--primary-container); padding:2px 6px; border-radius:10px; margin-left:4px;">${q.score}점</span>` : "";
+        div.onclick = () => { slideDirection = i > currentIndex ? 'slide-left' : 'slide-right'; currentIndex = i; updateDisplay(); toggleSidebar(false); };
+        div.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center;"><div>${i+1}. ${q.type==='SEN'?'[서술형] ':' '}${q.text.substring(0, 10)}...${pts}</div><span id="side-ans-${i}" style="font-size:0.8rem; color:var(--secondary);"></span></div>`;
+        list.appendChild(div);
+    });
+    updateSidebarStatus();
+}
+
+function updateSidebarStatus() {
+    questions.forEach((q, i) => {
+        const item = document.getElementById(`side-item-${i}`);
+        if(i === currentIndex) item.classList.add('active'); else item.classList.remove('active');
+        const ansSpan = document.getElementById(`side-ans-${i}`);
+        const uAns = userAnswers[q.id];
+        if (uAns && uAns.trim() !== '') { ansSpan.innerHTML = '●'; ansSpan.style.color = 'var(--primary)'; } 
+        else { ansSpan.innerHTML = '○'; ansSpan.style.color = 'var(--border)'; }
+    });
+}
+
+window.toggleHint = function() { document.getElementById('q-hint-box').classList.toggle('hide'); };
+
+function updateDisplay() {
+    const q = questions[currentIndex];
+    const wrapper = document.getElementById('quiz-wrapper');
+    wrapper.innerHTML = '';
+    const card = document.createElement('div'); card.className = `card ${slideDirection}`; slideDirection = ''; 
+
+    let qScore = q.score !== undefined ? `<span style="font-size: 0.9rem; font-weight: 500; color: var(--primary); background: var(--primary-container); padding: 4px 10px; border-radius: 12px; vertical-align: middle; margin-left: 8px;">배점 ${q.score}점</span>` : "";
+    let html = `<div class="q-text">${q.text} ${qScore}</div>`;
+    
+    if (q.hint) html += `<div style="margin-bottom: 20px;"><button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;" onclick="toggleHint()">💡 힌트 보기</button><div id="q-hint-box" class="hide" style="margin-top: 12px; padding: 16px; background: #fff8c5; border: 1px solid #e1c841; border-radius: 8px; font-size: 0.95rem; color: #4d4411;">${q.hint}</div></div>`;
+
+    if (q.type === 'SEL') {
+        html += `<div class="options-grid">`;
+        q.options.forEach((opt, i) => { const isSel = userAnswers[q.id] === opt; html += `<button class="option-btn ${isSel ? 'selected' : ''}" onclick="selectOption('${opt}')">${i+1}. ${opt}</button>`; });
+        html += `</div>`;
+    } else {
+        const val = userAnswers[q.id] || '';
+        if(q.type === 'SEN') html += `<textarea class="input-field" rows="5" placeholder="답안을 서술하세요..." onchange="saveTextAns(this.value)">${val}</textarea>`;
+        else html += `<input type="text" class="input-field" placeholder="정답을 입력하세요..." value="${val}" onchange="saveTextAns(this.value)">`;
+    }
+    card.innerHTML = html; wrapper.appendChild(card);
+    
+    document.getElementById('q-counter').innerText = `문제 ${currentIndex + 1} / ${questions.length}`;
+    document.getElementById('q-type-badge').innerText = typeLabels[q.type];
+    
+    document.getElementById('prev-btn').disabled = currentIndex === 0;
+    if (currentIndex === questions.length - 1) { document.getElementById('next-btn').classList.add('hide'); document.getElementById('final-submit-btn').classList.remove('hide'); } 
+    else { document.getElementById('next-btn').classList.remove('hide'); document.getElementById('final-submit-btn').classList.add('hide'); }
+    
+    updateSidebarStatus(); renderProgressBar();
+}
+
+window.selectOption = function(val) { userAnswers[questions[currentIndex].id] = val; updateDisplay(); };
+window.saveTextAns = function(val) { userAnswers[questions[currentIndex].id] = val; updateSidebarStatus(); };
+
+window.moveQuestion = function(dir) {
+    const newIdx = currentIndex + dir;
+    if (newIdx >= 0 && newIdx < questions.length) { slideDirection = dir > 0 ? 'slide-left' : 'slide-right'; currentIndex = newIdx; updateDisplay(); }
+};
+
+function renderProgressBar() {
+    const pct = ((currentIndex + 1) / questions.length) * 100;
+    document.getElementById('progress-bar').style.width = pct + '%';
+}
+
+window.toggleSidebar = function(force) {
+    const sb = document.getElementById('sidebar'); const ov = document.getElementById('sidebar-overlay');
+    if (force !== undefined) { if(force) { sb.classList.add('mobile-open'); ov.classList.add('active'); } else { sb.classList.remove('mobile-open'); ov.classList.remove('active'); } return; }
+    sb.classList.toggle('mobile-open'); ov.classList.toggle('active');
+};
+
+window.submitSession = function() {
+    if(confirm("정말 제출하시겠습니까? 제출 후에는 수정할 수 없습니다.")) {
+        session.completed = true; session.data.userAnswers = userAnswers;
+        saveSessionList(sessionList);
+        window.location.href = 'result.html';
+    }
+};
+
+window.goHome = function() {
+    session.data.userAnswers = userAnswers; saveSessionList(sessionList);
+    window.location.href = 'index.html';
+};

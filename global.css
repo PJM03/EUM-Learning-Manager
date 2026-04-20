@@ -1,0 +1,53 @@
+:root {
+    --bg-color: #f6f8fa; 
+    --surface: #ffffff;
+    --primary: #0b57d0;
+    --primary-container: #d3e3fd;
+    --on-primary-container: #041e49;
+    --secondary: #57606a; 
+    --border: #d0d7de; 
+    --success: #1a7f37;
+    --error: #cf222e;
+    --warning: #f29900;
+    --sidebar-width: 300px;
+    --transition-speed: 0.3s;
+    --header-height: 60px;
+}
+* { box-sizing: border-box; -webkit-font-smoothing: antialiased; font-family: 'Pretendard Variable', Pretendard, sans-serif; }
+body { background-color: var(--bg-color); color: #24292f; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+.container { max-width: 1000px; width: 100%; margin: 0 auto; }
+.hide { display: none !important; }
+
+#mobile-header { display: none; height: var(--header-height); background: var(--surface); border-bottom: 1px solid var(--border); align-items: center; padding: 0 16px; justify-content: space-between; position: fixed; top: 0; left: 0; right: 0; z-index: 900; }
+.header-title { font-weight: 700; font-size: 1.2rem; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: all 0.2s; border: none; }
+.btn-filled { background-color: var(--primary); color: white; }
+.btn-filled:hover { background-color: #0a4ab3; }
+.btn-outline { background-color: transparent; border: 1px solid var(--border); color: var(--secondary); }
+.btn-outline:hover { background-color: rgba(0,0,0,0.04); color: #24292f; }
+.input-field { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; }
+.input-field:focus { border-color: var(--primary); }
+
+.badge-status { font-size: 0.75rem; padding: 4px 10px; border-radius: 20px; font-weight: 600; }
+.badge-ing { background: #f0f5ff; color: var(--primary); border: 1px solid var(--primary-container); }
+.badge-done { background: #dafbe1; color: var(--success); border: 1px solid #ade4b8; }
+
+.icon-btn { background: var(--bg-color); border: 1px solid var(--border); border-radius: 8px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--secondary); transition: all 0.2s; }
+.icon-btn:hover { background: white; color: var(--primary); border-color: var(--primary); }
+.icon-btn.danger:hover { color: var(--error); border-color: var(--error); background: #fff0f0; }
+
+.app-footer { text-align: center; padding: 32px 24px; color: var(--secondary); font-size: 0.9rem; border-top: 1px solid var(--border); margin-top: auto; }
+.app-footer a { color: var(--primary); text-decoration: none; font-weight: 500; }
+
+@keyframes spin { 100% { transform: rotate(360deg); } }
+.spinner { display: inline-block; animation: spin 1s linear infinite; }
+
+/* PC 전용 숨김 클래스 */
+.mobile-only { display: none !important; }
+
+@media (max-width: 768px) {
+    #mobile-header { display: flex; }
+    .desktop-only { display: none !important; } 
+    .mobile-only { display: inline-flex !important; } /* 모바일에서만 노출 */
+}
