@@ -41,3 +41,11 @@ function normalizeQuestions(parsedData) {
         score: q.score !== undefined ? Number(q.score) : 1
     }));
 }
+
+// 우클릭 컨텍스트 메뉴 및 롱프레스 드래그 방지
+document.addEventListener('contextmenu', function(e) {
+    // 입력 폼은 예외 처리
+    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+    }
+});
