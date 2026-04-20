@@ -24,6 +24,26 @@ window.onload = () => {
             
             if (currentIndex < questions.length - 1) moveQuestion(1);
             else document.getElementById('final-submit-btn').focus();
+            return;
+        }
+
+        // 입력칸에 포커스가 있을 때는 숫자 단축키 무시 (단답/서술형 입력 중 오작동 방지)
+        if(document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
+            return;
+        }
+
+        // 객관식 숫자 키보드 선택 로직 (1~9)
+        const q = questions[currentIndex];
+        if (q && q.type === 'SEL') {
+            const keyNum = parseInt(e.key, 10);
+            if (!isNaN(keyNum) && keyNum >= 1 && keyNum <= 9) {
+                const optIndex = keyNum - 1; // 1번 키는 배열의 0번째 요소
+                // 존재하는 선택지 개수 내에서만 동작
+                if (optIndex < q.options.length) {
+                    e.preventDefault();
+                    selectOption(q.options[optIndex], q.id);
+                }
+            }
         }
     });
 };
@@ -90,6 +110,18 @@ function updateDisplay() {
     else { document.getElementById('next-btn').classList.remove('hide'); document.getElementById('final-submit-btn').classList.add('hide'); }
     
     updateSidebarStatus(); renderProgressBar();
+
+    // 텍스트 입력칸이 있는 경우 화면 전환 후 자동으로 포커스 이동
+    const inputEl = card.querySelector('.input-field');
+    if (inputEl) {
+        setTimeout(() => {
+            inputEl.focus();
+            // 기존 답안이 있을 경우 커서를 텍스트 맨 끝으로 이동
+            if (inputEl.value) {
+                inputEl.selectionStart = inputEl.selectionEnd = inputEl.value.length;
+            }
+        }, 100);
+    }
 }
 
 // 명시적인 ID를 받아 해당 문제의 답안으로 저장
