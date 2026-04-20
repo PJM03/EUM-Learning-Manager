@@ -16,6 +16,12 @@ window.onload = () => {
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Tab') {
             e.preventDefault();
+            
+            // 다음 문제로 넘어가기 전, 현재 입력칸의 포커스를 해제하여 onchange 이벤트를 강제로 발생시킴
+            if(document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
+                document.activeElement.blur();
+            }
+            
             if (currentIndex < questions.length - 1) moveQuestion(1);
             else document.getElementById('final-submit-btn').focus();
         }
@@ -62,12 +68,17 @@ function updateDisplay() {
 
     if (q.type === 'SEL') {
         html += `<div class="options-grid">`;
-        q.options.forEach((opt, i) => { const isSel = userAnswers[q.id] === opt; html += `<button class="option-btn ${isSel ? 'selected' : ''}" onclick="selectOption('${opt}')">${i+1}. ${opt}</button>`; });
+        q.options.forEach((opt, i) => { 
+            const isSel = userAnswers[q.id] === opt; 
+            const safeOpt = opt.replace(/'/g, "\\'"); // 싱글쿼터 이스케이프 처리
+            html += `<button class="option-btn ${isSel ? 'selected' : ''}" onclick="selectOption('${safeOpt}', '${q.id}')">${i+1}. ${opt}</button>`; 
+        });
         html += `</div>`;
     } else {
         const val = userAnswers[q.id] || '';
-        if(q.type === 'SEN') html += `<textarea class="input-field" rows="5" placeholder="답안을 서술하세요..." onchange="saveTextAns(this.value)">${val}</textarea>`;
-        else html += `<input type="text" class="input-field" placeholder="정답을 입력하세요..." value="${val}" onchange="saveTextAns(this.value)">`;
+        // 고유 문제 ID(q.id)를 직접 전달하여 인덱스 변화로 인한 오류를 방지
+        if(q.type === 'SEN') html += `<textarea class="input-field" rows="5" placeholder="답안을 서술하세요..." onchange="saveTextAns(this.value, '${q.id}')">${val}</textarea>`;
+        else html += `<input type="text" class="input-field" placeholder="정답을 입력하세요..." value="${val}" onchange="saveTextAns(this.value, '${q.id}')">`;
     }
     card.innerHTML = html; wrapper.appendChild(card);
     
@@ -81,8 +92,19 @@ function updateDisplay() {
     updateSidebarStatus(); renderProgressBar();
 }
 
-window.selectOption = function(val) { userAnswers[questions[currentIndex].id] = val; updateDisplay(); };
-window.saveTextAns = function(val) { userAnswers[questions[currentIndex].id] = val; updateSidebarStatus(); };
+// 명시적인 ID를 받아 해당 문제의 답안으로 저장
+window.selectOption = function(val, qId) { 
+    const targetId = qId || questions[currentIndex].id;
+    userAnswers[targetId] = val; 
+    updateDisplay(); 
+};
+
+// 명시적인 ID를 받아 해당 문제의 답안으로 저장
+window.saveTextAns = function(val, qId) { 
+    const targetId = qId || questions[currentIndex].id;
+    userAnswers[targetId] = val; 
+    updateSidebarStatus(); 
+};
 
 window.moveQuestion = function(dir) {
     const newIdx = currentIndex + dir;
