@@ -42,9 +42,18 @@ function normalizeQuestions(parsedData) {
     }));
 }
 
+// 파일 읽기 공통 래퍼
+function readFileAsText(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsText(file);
+    });
+}
+
 // 우클릭 컨텍스트 메뉴 및 롱프레스 드래그 방지
 document.addEventListener('contextmenu', function(e) {
-    // 입력 폼은 예외 처리
     if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
         e.preventDefault();
     }

@@ -10,6 +10,7 @@ let currentStatMode = 'ALL';
 window.onload = async () => {
     renderStartScreen();
     await loadPromptTemplate();
+    initDragAndDrop(); // 드래그 앤 드롭 초기화
     
     document.addEventListener('click', (e) => {
         if (!e.target.closest('#export-menu') && !e.target.closest('.export-btn-trigger')) {
@@ -22,6 +23,108 @@ window.onload = async () => {
     });
 };
 
+// 드래그 앤 드롭 설정
+function initDragAndDrop() {
+    const dropZone = document.getElementById('drop-zone');
+    
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, e => {
+            e.preventDefault();
+            e.stopPropagation();
+        }, false);
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+            dropZone.style.borderColor = 'var(--primary)';
+            dropZone.style.background = 'rgba(11, 87, 208, 0.05)';
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+            dropZone.style.borderColor = 'transparent';
+            dropZone.style.background = 'transparent';
+        }, false);
+    });
+
+    dropZone.addEventListener('drop', async (e) => {
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            for (let file of files) {
+                const text = await readFileAsText(file);
+                await handleDataImport(text, file.name);
+            }
+        }
+    });
+}
+
+// 클립보드에서 가져오기
+async function importFromClipboard() {
+    try {
+        const text = await navigator.clipboard.readText();
+        if (!text || text.trim() === "") {
+            throw new Error("클립보드가 비어있습니다.");
+        }
+        await handleDataImport(text, "Clipboard_Import");
+    } catch (err) {
+        showLoadingModal("오류 발생", err.message || "클립보드 접근 권한이 없거나 데이터가 올바르지 않습니다.");
+        finishLoadingModal("실패", "데이터를 가져오지 못했습니다.", true);
+    }
+}
+
+// 데이터 처리 통합 로직
+async function handleDataImport(text, filename) {
+    if (filename.endsWith('.elmb')) {
+        const pwd = await showPromptModal("전체 복원 (.elmb)", "백업 파일의 암호를 입력해주세요.", "", true);
+        if(!pwd) return;
+        try {
+            const bytes = CryptoJS.AES.decrypt(text, pwd);
+            const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+            if (!decrypted) throw new Error();
+            const importedSessions = JSON.parse(decrypted);
+            if (sessionList.length > 0 && !confirm("현재 모든 기록이 삭제되고 백업 데이터로 덮어씌워집니다. 진행할까요?")) return;
+            sessionList = importedSessions; saveSessionList(sessionList); renderStartScreen();
+            alert("성공적으로 복원되었습니다.");
+        } catch (e) { alert("비밀번호가 틀렸거나 파일이 손상되었습니다."); }
+    } else if (filename.endsWith('.ebd') || (filename === "Clipboard_Import" && text.length > 100 && !text.startsWith('{') && !text.startsWith('['))) {
+        // EBD 파일이거나 클립보드 데이터가 암호화된 형태인 경우
+        const pwd = await showPromptModal("EBD 잠금 해제", "파일 혹은 데이터의 암호를 입력해주세요.", "", true);
+        if(!pwd) return;
+        try {
+            const bytes = CryptoJS.AES.decrypt(text, pwd);
+            const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+            if (!decrypted) throw new Error();
+            const parsed = JSON.parse(decrypted);
+            processParsedData(parsed, filename);
+        } catch (e) { alert("비밀번호가 틀렸거나 데이터가 손상되었습니다."); }
+    } else {
+        // 일반 JSON 처리
+        try { 
+            const parsed = JSON.parse(text);
+            processParsedData(parsed, filename);
+        } catch (e) { 
+            showLoadingModal("형식 오류", "문제 데이터셋 규격에 맞지 않는 JSON 형식입니다.");
+            finishLoadingModal("실패", "올바른 데이터를 입력해주세요.", true);
+        }
+    }
+}
+
+function processParsedData(parsed, filename) {
+    const completed = parsed.completed || false;
+    const userAnswers = parsed.userAnswers || {};
+    const normQs = normalizeQuestions(parsed);
+    if (normQs.length === 0) throw new Error("문제 데이터가 없습니다.");
+    
+    const questions = completed ? normQs : shuffleArray(normQs);
+    const subject = Array.isArray(parsed) ? "미분류" : (parsed.lecture || parsed.subject || "미분류");
+    const professor = Array.isArray(parsed) ? "" : (parsed.professor || "");
+    const title = filename === "Clipboard_Import" ? `클립보드_${new Date().getTime()}` : filename.replace('.json', '').replace('.ebd', '');
+    
+    processImportedData(questions, title, subject, professor, completed, userAnswers);
+}
+
+// 기존 로직 유지
 async function loadPromptTemplate() {
     try {
         const res = await fetch('./gemini_qset_gen_prompt.md');
@@ -78,7 +181,7 @@ function renderStartScreen() {
     const expandBtn = document.getElementById('show-more-btn');
     
     if (sessionList.length === 0) {
-        container.innerHTML = `<div style="text-align: center; color: var(--secondary); padding: 40px 0;">저장된 학습 기록이 없습니다.<br>새 파일을 열어주세요.</div>`;
+        container.innerHTML = `<div style="text-align: center; color: var(--secondary); padding: 40px 0;">저장된 학습 기록이 없습니다.<br>새 파일을 열거나 드래그하여 드롭하세요.</div>`;
         expandBtn.classList.add('hide');
         updateDashboardStats();
         return;
@@ -179,7 +282,6 @@ function updateDashboardStats() {
         const isTarget = (currentStatMode === 'ALL' || sub === currentStatMode);
         let labelKey = currentStatMode === 'ALL' ? sub : s.title;
         
-        // 제출(완료)된 세션의 데이터만 통계에 편입
         if (s.completed) {
             completedSessions++;
             if (isTarget && !barStats[labelKey]) barStats[labelKey] = { earned: 0, total: 0 };
@@ -302,50 +404,13 @@ function closeModal(id) { document.getElementById(id).classList.remove('active')
 window.handleFileUpload = async function(event) {
     const file = event.target.files[0];
     if (!file) return;
-    const text = await file.text(); const filename = file.name;
-    if (filename.endsWith('.elmb')) {
-        showPromptModal("전체 복원 (.elmb)", "백업 파일의 암호를 입력해주세요.", "", true).then(pwd => {
-            if(!pwd) return;
-            try {
-                const bytes = CryptoJS.AES.decrypt(text, pwd); const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-                if (!decrypted) throw new Error();
-                const importedSessions = JSON.parse(decrypted);
-                if (sessionList.length > 0 && !confirm("현재 모든 기록이 삭제되고 백업 데이터로 덮어씌워집니다. 진행할까요?")) return;
-                sessionList = importedSessions; saveSessionList(sessionList); renderStartScreen(); alert("성공적으로 복원되었습니다.");
-            } catch (e) { alert("비밀번호가 틀렸거나 파일이 손상되었습니다."); }
-        });
-    } else if (filename.endsWith('.ebd')) {
-        showPromptModal("EBD 잠금 해제", "파일의 암호를 입력해주세요.", "", true).then(pwd => {
-            if(!pwd) return;
-            try {
-                const bytes = CryptoJS.AES.decrypt(text, pwd); const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-                if (!decrypted) throw new Error();
-                const parsed = JSON.parse(decrypted);
-                
-                const completed = parsed.completed || false;
-                const userAnswers = parsed.userAnswers || {};
-                const normQs = normalizeQuestions(parsed);
-                const questions = completed ? normQs : shuffleArray(normQs);
-                
-                processImportedData(questions, filename, Array.isArray(parsed) ? "미분류" : (parsed.lecture || parsed.subject || "미분류"), Array.isArray(parsed) ? "" : (parsed.professor || ""), completed, userAnswers);
-            } catch (e) { alert("비밀번호가 틀렸거나 파일이 손상되었습니다."); }
-        });
-    } else {
-        try { 
-            const parsed = JSON.parse(text);
-            const completed = parsed.completed || false;
-            const userAnswers = parsed.userAnswers || {};
-            const normQs = normalizeQuestions(parsed);
-            const questions = completed ? normQs : shuffleArray(normQs);
-            
-            processImportedData(questions, filename, Array.isArray(parsed) ? "미분류" : (parsed.lecture || parsed.subject || "미분류"), Array.isArray(parsed) ? "" : (parsed.professor || ""), completed, userAnswers);
-        } catch (e) { alert("올바르지 않은 JSON 파일입니다."); }
-    }
+    const text = await readFileAsText(file);
+    await handleDataImport(text, file.name);
     event.target.value = '';
 };
 
 function processImportedData(data, filename, subject, professor, completed = false, userAnswers = {}) {
-    sessionList.push({ id: 'S' + Date.now(), title: filename.replace('.json', '').replace('.ebd', ''), subject: subject, professor: professor, timestamp: Date.now(), completed: completed, data: { questions: data, userAnswers: userAnswers } });
+    sessionList.push({ id: 'S' + Date.now(), title: filename, subject: subject, professor: professor, timestamp: Date.now(), completed: completed, data: { questions: data, userAnswers: userAnswers } });
     saveSessionList(sessionList); renderStartScreen();
 }
 
